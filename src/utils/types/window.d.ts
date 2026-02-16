@@ -15,6 +15,9 @@ declare global {
       requestEngagements: () => Promise<EngagementData[]>;
       requestThreats: () => Promise<ThreatData[]>;
     };
+    config?: {
+      getConfig: () => Promise<{ ip?: string; port?: string } | null>;
+    };
   }
 }
 

@@ -57,3 +57,7 @@ contextBridge.exposeInMainWorld('udpRequest', {
   requestThreats: () => ipcRenderer.invoke('udp-request-threats'),
 });
 
+contextBridge.exposeInMainWorld('config', {
+  getConfig: () => ipcRenderer.invoke('get-config'),
+});
+

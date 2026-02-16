@@ -187,7 +187,7 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
       false
     );
 
-    // Return layers in order: glow -> mother icon -> members
+    // Return layers in order: network members -> targets -> threats -> mother node (on top)
     const orderedLayers: any[] = [];
 
     // Apply filter logic
@@ -196,44 +196,6 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
     const showNetworkMembers = filter === 'all' || filter === 'network-members';
     const showTargets = filter === 'all' || filter === 'targets';
     const showThreats = filter === 'all' || filter === 'threats';
-
-    // Glow layer first (behind) - only show when mother node filter is active
-    if (showMotherNode && motherAircraftGlowLayer) {
-      orderedLayers.push(motherAircraftGlowLayer);
-    }
-
-    // Mother aircraft layer - only show when mother node filter is active (explicitly excluded for network-members)
-    if (showMotherNode && motherAircraftLayer) {
-      orderedLayers.push(motherAircraftLayer);
-    }
-    
-    // Add text labels for mother aircraft (Global ID) - above icon, rendered after icon layer
-    if (showMotherNode && motherAircraftData.length > 0) {
-      const motherAircraftTextLayer = new TextLayer({
-        id: 'mother-aircraft-text-layer',
-        data: motherAircraftData,
-        pickable: false,
-        getPosition: (d: any) => d.position,
-          getText: (d: any) => `ID${d.globalId}`,
-        getSize: 16,
-        getColor: [255, 255, 255, 255], // White text for better visibility
-        getAngle: 0, // No rotation - always horizontal
-        getTextAnchor: 'middle',
-        getAlignmentBaseline: 'bottom',
-        sizeScale: 1.2,
-        sizeUnits: 'pixels',
-        billboard: true, // Always face camera
-        getPixelOffset: [0, -20], // Offset above icon (20 pixels up)
-        outlineColor: [0, 191, 255, 255], // Bright blue border (RGB: 0, 191, 255 - dodger blue)
-        outlineWidth: 3, // Thicker border for better visibility
-        fontWeight: 'bold',
-        updateTriggers: {
-          getText: motherAircraftData.map(d => d.globalId).join(','),
-          data: motherAircraftData.length,
-        },
-      });
-      orderedLayers.push(motherAircraftTextLayer);
-    }
 
     // Network members layer - only show when network-members filter is active (excludes mother node)
     if (showNetworkMembers && networkMemberLayer) {
@@ -249,7 +211,7 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
         getPosition: (d: any) => d.position,
           getText: (d: any) => `ID${d.globalId}`,
         getSize: 16,
-        getColor: [255, 255, 255, 255], // White text for better visibility
+        getColor: [0, 240, 255, 255], // White text for better visibility
         getAngle: 0, // No rotation - always horizontal
         getTextAnchor: 'middle',
         getAlignmentBaseline: 'bottom',
@@ -257,8 +219,8 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
         sizeUnits: 'pixels',
         billboard: true, // Always face camera
         getPixelOffset: [0, -28], // Offset above icon (20 pixels up)
-        outlineColor: [0, 191, 255, 255], // Bright blue border (RGB: 0, 191, 255 - dodger blue)
-        outlineWidth: 3, // Thicker border for better visibility
+        outlineColor: [0, 0, 0, 255], // Bright blue border (RGB: 0, 191, 255 - dodger blue)
+        outlineWidth: 10, // Thicker border for better visibility
         fontWeight: 'bold',
         updateTriggers: {
           getText: networkMemberData.map(d => d.globalId).join(','),
@@ -372,6 +334,45 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
           nodesCount: nodes.size
         });
       }
+    }
+
+    // Mother node layers rendered LAST (highest z-index) - on top of everything
+    // Glow layer first (behind icon) - only show when mother node filter is active
+    if (showMotherNode && motherAircraftGlowLayer) {
+      orderedLayers.push(motherAircraftGlowLayer);
+    }
+
+    // Mother aircraft layer - only show when mother node filter is active
+    if (showMotherNode && motherAircraftLayer) {
+      orderedLayers.push(motherAircraftLayer);
+    }
+    
+    // Add text labels for mother aircraft (Global ID) - above icon, rendered after icon layer
+    if (showMotherNode && motherAircraftData.length > 0) {
+      const motherAircraftTextLayer = new TextLayer({
+        id: 'mother-aircraft-text-layer',
+        data: motherAircraftData,
+        pickable: false,
+        getPosition: (d: any) => d.position,
+          getText: (d: any) => `ID${d.globalId}`,
+        getSize: 16,
+        getColor: [0, 240, 255, 255], // White text for better visibility
+        getAngle: 0, // No rotation - always horizontal
+        getTextAnchor: 'middle',
+        getAlignmentBaseline: 'bottom',
+        sizeScale: 1.2,
+        sizeUnits: 'pixels',
+        billboard: true, // Always face camera
+        getPixelOffset: [0, -20], // Offset above icon (20 pixels up)
+        outlineColor: [0, 0, 0, 255], // Bright blue border (RGB: 0, 191, 255 - dodger blue)
+        outlineWidth: 10, // Thicker border for better visibility
+        fontWeight: 'bold',
+        updateTriggers: {
+          getText: motherAircraftData.map(d => d.globalId).join(','),
+          data: motherAircraftData.length,
+        },
+      });
+      orderedLayers.push(motherAircraftTextLayer);
     }
 
     return orderedLayers;

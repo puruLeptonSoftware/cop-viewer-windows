@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ConfigPageProps {
   onConnect: (host: string, port: string) => void;
@@ -7,6 +7,26 @@ interface ConfigPageProps {
 export function ConfigPage({ onConnect }: ConfigPageProps) {
   const [host, setHost] = useState('127.0.0.1');
   const [port, setPort] = useState('5005');
+
+  // Load config from config.json if available
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        if (window.config && window.config.getConfig) {
+          const config = await window.config.getConfig();
+          if (config && config.ip && config.port) {
+            setHost(config.ip);
+            setPort(config.port);
+          }
+        }
+      } catch (error) {
+        // Silently fail and use defaults
+        console.warn('[ConfigPage] Failed to load config:', error);
+      }
+    };
+
+    loadConfig();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

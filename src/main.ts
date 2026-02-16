@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import dgram from 'node:dgram';
 import path from 'node:path';
+import fs from 'node:fs';
 import { parseUdpMessage } from './utils/parsers';
 
 let mainWindow: BrowserWindow | null = null;
@@ -15,12 +16,43 @@ let lastUdpMessageTime: number | null = null;
 let staleCheckInterval: NodeJS.Timeout | null = null;
 const STALE_UDP_TIMEOUT_MS = 5000; // Clear data if no UDP messages for 5 seconds
 
+// Read config.json from executable directory
+function readConfigJson(): { ip?: string; port?: string } | null {
+  try {
+    const exeDir = path.dirname(process.execPath);
+    const configPath = path.join(exeDir, 'config.json');
+    
+    if (fs.existsSync(configPath)) {
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configContent);
+      
+      // Validate format - must have ip and port keys
+      if (config && typeof config === 'object' && 'ip' in config && 'port' in config) {
+        return {
+          ip: String(config.ip),
+          port: String(config.port),
+        };
+      }
+    }
+  } catch (error) {
+    // Silently fail if config.json doesn't exist or is invalid
+    console.warn('[Config] Failed to read config.json:', error);
+  }
+  
+  return null;
+}
+
 function promptForUdpConfig(): Promise<{ host: string; port: number }> {
   return new Promise((resolve, reject) => {
     if (promptWindow) {
       promptWindow.focus();
       return;
     }
+
+    // Read config.json for default values
+    const config = readConfigJson();
+    const defaultHost = config?.ip || '127.0.0.1';
+    const defaultPort = config?.port || '5005';
 
     promptWindow = new BrowserWindow({
       width: 420,
@@ -122,11 +154,11 @@ function promptForUdpConfig(): Promise<{ host: string; port: number }> {
           <form id="udp-config-form">
             <label>
               Host
-              <input type="text" id="udp-host" value="127.0.0.1" required />
+              <input type="text" id="udp-host" value="${defaultHost}" required />
             </label>
             <label>
               Port
-              <input type="number" id="udp-port" value="5005" min="1" max="65535" required />
+              <input type="number" id="udp-port" value="${defaultPort}" min="1" max="65535" required />
             </label>
             <div class="actions">
               <button type="submit" class="primary">Connect</button>
@@ -238,6 +270,17 @@ function setupUdpClient(host: string, port: number): Promise<void> {
       latestThreats = [];
       lastUdpMessageTime = null;
       
+      // Clear/override the UDP log file when starting new UDP connection
+      if (!MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+        try {
+          const exeDir = path.dirname(process.execPath);
+          const logFilePath = path.join(exeDir, 'udp_raw_buffer.log');
+          fs.writeFileSync(logFilePath, '', 'utf8'); // Overwrite/create empty file
+        } catch (error) {
+          console.error('[UDP] Failed to clear log file:', error);
+        }
+      }
+      
       console.log(`[UDP] Setting up client on ${host}:${port}`);
       udpSocket = dgram.createSocket('udp4');
 
@@ -249,6 +292,29 @@ function setupUdpClient(host: string, port: number): Promise<void> {
       udpSocket.on('message', (msg) => {
         // Update last message time
         lastUdpMessageTime = Date.now();
+        
+        // Log raw buffer to text file (only in production/exe mode)
+        if (!MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+          try {
+            // Get the directory where the executable is located
+            const exeDir = path.dirname(process.execPath);
+            const logFilePath = path.join(exeDir, 'udp_raw_buffer.log');
+            
+            // Convert buffer to hex string for readability
+            const hexString = Array.from(msg)
+              .map((byte) => byte.toString(16).padStart(2, '0').toUpperCase())
+              .join(' ');
+            
+            // Append to file with timestamp
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] Opcode: ${msg[1]} | Length: ${msg.length} bytes | Hex: ${hexString}\n`;
+            
+            fs.appendFileSync(logFilePath, logEntry, 'utf8');
+          } catch (error) {
+            // Silently fail if file writing fails (e.g., permissions issue)
+            console.error('[UDP] Failed to write buffer to log file:', error);
+          }
+        }
         
         // Convert message to binary string for bit operations (used by opcode 101)
         const isAsciiBinary = msg.every((byte) => byte === 48 || byte === 49);
@@ -415,6 +481,10 @@ ipcMain.handle('udp-request-engagements', async () => {
 
 ipcMain.handle('udp-request-threats', async () => {
   return latestThreats;
+});
+
+ipcMain.handle('get-config', async () => {
+  return readConfigJson();
 });
 
 app.whenReady().then(async () => {
