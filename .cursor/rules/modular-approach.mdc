@@ -1,0 +1,62 @@
+---
+alwaysApply: true
+description: Follow modular approach - create reusable components instead of duplicating code
+---
+
+# Modular Approach Rule
+
+## Always Create Reusable Components
+
+**NEVER duplicate code. Always create reusable components when the same functionality appears in multiple places.**
+
+### Principles:
+
+1. **Component Extraction**: If you find yourself writing similar code in multiple files, extract it into a reusable component.
+
+2. **Single Responsibility**: Each component should have one clear purpose.
+
+3. **Props-Based Configuration**: Use props to make components flexible and reusable.
+
+4. **Shared Components**: Place shared components in appropriate directories:
+   - `src/components/shared/` - For truly shared UI components
+   - `src/components/[feature]/` - For feature-specific shared components
+
+### Examples:
+
+**❌ BAD - Duplicated Code:**
+```tsx
+// File 1
+const AirspeedTape = () => {
+  return <div style={{...}}>...</div>;
+}
+
+// File 2 (duplicate!)
+const AirspeedTape = () => {
+  return <div style={{...}}>...</div>;
+}
+```
+
+**✅ GOOD - Reusable Component:**
+```tsx
+// src/components/shared/AirspeedTape.tsx
+export const AirspeedTape = ({ speed, ...props }) => {
+  return <div className="...">...</div>;
+}
+
+// File 1 & File 2
+import { AirspeedTape } from '../shared/AirspeedTape';
+```
+
+### When to Create Components:
+
+- ✅ Same UI element used in 2+ places
+- ✅ Complex logic that can be isolated
+- ✅ Related functionality that belongs together
+- ✅ When code exceeds ~50 lines and could be reused
+
+### Benefits:
+
+- **DRY (Don't Repeat Yourself)**: Single source of truth
+- **Maintainability**: Fix bugs once, works everywhere
+- **Consistency**: Same behavior across the app
+- **Testability**: Easier to test isolated components

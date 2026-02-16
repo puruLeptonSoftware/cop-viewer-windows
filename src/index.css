@@ -21,3 +21,6 @@
   }
 }
 
+.mapboxgl-ctrl-logo{
+    opacity: 0;
+}

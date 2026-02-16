@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect, useCallback } from 'react';
 import Map, { useControl } from 'react-map-gl/mapbox';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { useMap } from '../../../contexts/MapContext';
@@ -6,6 +6,7 @@ import { useGetNetworkMembers } from '../../../utils/hooks/useGetNetworkMembers'
 import { useGetTargets } from '../../../utils/hooks/useGetTargets';
 import { useGetThreats } from '../../../utils/hooks/useGetThreats';
 import { useUdpLayers } from './UdpLayers';
+import { RadarFilterBar } from '../../shared/RadarFilterBar';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 // Deck.gl overlay component
@@ -192,7 +193,7 @@ function RadarRingsOverlay({ zoom, centerLat }: { zoom: number; centerLat: numbe
 }
 
 export function RadarView() {
-  const { isMapVisible, viewMode, zoomLevel, center, setZoom } = useMap();
+  const { isMapVisible, viewMode, zoomLevel, center, setZoom, setCenter, radarFilter, setRadarFilter } = useMap();
   const { nodes } = useGetNetworkMembers();
   const { targets } = useGetTargets();
   const mapRef = useRef<any>(null);
@@ -200,6 +201,8 @@ export function RadarView() {
   const pendingViewStateRef = useRef<{ zoom: number; longitude: number; latitude: number } | null>(null);
   const isUserInteractingRef = useRef(false);
   const lastAppliedRef = useRef<{ zoom: number; longitude: number; latitude: number } | null>(null);
+  const hasFittedBoundsRef = useRef(false);
+  const lastFilterRef = useRef<string>('all');
 
   // Only render in radar mode when map is OFF
   const shouldShow = viewMode === 'normal' && !isMapVisible;
@@ -207,29 +210,204 @@ export function RadarView() {
   const { threats } = useGetThreats();
   
   // Generate UDP layers for radar view (visible when map is off)
-  const udpLayers = useUdpLayers({ nodes, targets, threats, visible: shouldShow });
+  const udpLayers = useUdpLayers({ nodes, targets, threats, visible: shouldShow, filter: radarFilter });
 
   // Find mother aircraft from nodes
+  // Only treat as mother aircraft if isMotherAc === 1 (from opcode 102)
   const motherAircraft = useMemo(() => {
     for (const node of nodes.values()) {
-      if (node.internalData?.isMotherAc === 1 || node.globalId === 10) {
+      if (node.internalData?.isMotherAc === 1) {
         return node;
       }
     }
     return null;
   }, [nodes]);
 
-  // Use mother aircraft position as center, fallback to context center
+  // Helper function to calculate threat position from mother aircraft
+  const calculateThreatPosition = useCallback((
+    motherLat: number,
+    motherLng: number,
+    range: number,
+    azimuth: number
+  ): { latitude: number; longitude: number } => {
+    const R = 6371000;
+    const lat1Rad = (motherLat * Math.PI) / 180;
+    const lng1Rad = (motherLng * Math.PI) / 180;
+    const bearingRad = ((azimuth - 90) * Math.PI) / 180;
+    const angularDistance = range / R;
+    const newLatRad = Math.asin(
+      Math.sin(lat1Rad) * Math.cos(angularDistance) +
+      Math.cos(lat1Rad) * Math.sin(angularDistance) * Math.cos(bearingRad)
+    );
+    const newLngRad = lng1Rad + Math.atan2(
+      Math.sin(bearingRad) * Math.sin(angularDistance) * Math.cos(lat1Rad),
+      Math.cos(angularDistance) - Math.sin(lat1Rad) * Math.sin(newLatRad)
+    );
+    return { latitude: (newLatRad * 180) / Math.PI, longitude: (newLngRad * 180) / Math.PI };
+  }, []);
+
+  // Calculate center based on filter
   const currentCenter = useMemo<[number, number]>(() => {
-    if (motherAircraft && 
-        typeof motherAircraft.longitude === 'number' && 
-        typeof motherAircraft.latitude === 'number' &&
-        Number.isFinite(motherAircraft.longitude) &&
-        Number.isFinite(motherAircraft.latitude)) {
-      return [motherAircraft.longitude, motherAircraft.latitude];
+    let points: Array<{ lat: number; lng: number }> = [];
+
+    if (radarFilter === 'network-members') {
+      // When Network Member filter is selected, center on mother node
+      if (motherAircraft && 
+          motherAircraft.latitude !== undefined && 
+          motherAircraft.longitude !== undefined &&
+          Number.isFinite(motherAircraft.latitude) &&
+          Number.isFinite(motherAircraft.longitude)) {
+        return [motherAircraft.longitude, motherAircraft.latitude];
+      }
+      // Fallback: Center of bounding box of Network Members (non-mother nodes)
+      Array.from(nodes.values()).forEach((node) => {
+        if (
+          node.internalData?.isMotherAc !== 1 &&
+          node.latitude !== undefined &&
+          node.longitude !== undefined &&
+          Number.isFinite(node.latitude) &&
+          Number.isFinite(node.longitude)
+        ) {
+          points.push({ lat: node.latitude, lng: node.longitude });
+        }
+      });
+    } else if (radarFilter === 'targets') {
+      // Center of bounding box of Targets
+      targets.forEach((target) => {
+        if (
+          target.latitude !== undefined &&
+          target.longitude !== undefined &&
+          Number.isFinite(target.latitude) &&
+          Number.isFinite(target.longitude)
+        ) {
+          points.push({ lat: target.latitude, lng: target.longitude });
+        }
+      });
+    } else if (radarFilter === 'threats') {
+      // Center of bounding box of Threats
+      if (motherAircraft && 
+          motherAircraft.latitude !== undefined && 
+          motherAircraft.longitude !== undefined &&
+          Number.isFinite(motherAircraft.latitude) &&
+          Number.isFinite(motherAircraft.longitude)) {
+        threats.forEach((threat) => {
+          const position = calculateThreatPosition(
+            motherAircraft.latitude!,
+            motherAircraft.longitude!,
+            threat.threatRange,
+            threat.threatAzimuth
+          );
+          if (Number.isFinite(position.latitude) && Number.isFinite(position.longitude)) {
+            points.push({ lat: position.latitude, lng: position.longitude });
+          }
+        });
+      }
+    } else {
+      // Mother Node and All Nodes: Center of bounding box of mother aircraft
+      if (motherAircraft && 
+          motherAircraft.latitude !== undefined && 
+          motherAircraft.longitude !== undefined &&
+          Number.isFinite(motherAircraft.latitude) &&
+          Number.isFinite(motherAircraft.longitude)) {
+        return [motherAircraft.longitude, motherAircraft.latitude];
+      }
     }
+
+    // Calculate center from bounding box
+    if (points.length > 0) {
+      const lats = points.map((p) => p.lat);
+      const lngs = points.map((p) => p.lng);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+      const centerLat = (minLat + maxLat) / 2;
+      const centerLng = (minLng + maxLng) / 2;
+      return [centerLng, centerLat];
+    }
+
+    // Fallback to context center
     return center.radar;
-  }, [motherAircraft, center.radar]);
+  }, [radarFilter, nodes, targets, threats, motherAircraft, calculateThreatPosition, center.radar]);
+
+  // Calculate bounding box for fitting view (used when no mother aircraft)
+  const boundingBox = useMemo(() => {
+    let points: Array<{ lat: number; lng: number }> = [];
+
+    if (radarFilter === 'network-members') {
+      // When Network Member filter is selected, use mother aircraft as center (don't fit bounds)
+      if (motherAircraft && 
+          motherAircraft.latitude !== undefined && 
+          motherAircraft.longitude !== undefined &&
+          Number.isFinite(motherAircraft.latitude) &&
+          Number.isFinite(motherAircraft.longitude)) {
+        return null; // Don't fit bounds, use mother aircraft as center
+      }
+      // Fallback: Calculate bounding box of Network Members (non-mother nodes)
+      Array.from(nodes.values()).forEach((node) => {
+        if (
+          node.internalData?.isMotherAc !== 1 &&
+          node.latitude !== undefined &&
+          node.longitude !== undefined &&
+          Number.isFinite(node.latitude) &&
+          Number.isFinite(node.longitude)
+        ) {
+          points.push({ lat: node.latitude, lng: node.longitude });
+        }
+      });
+    } else if (radarFilter === 'targets') {
+      targets.forEach((target) => {
+        if (
+          target.latitude !== undefined &&
+          target.longitude !== undefined &&
+          Number.isFinite(target.latitude) &&
+          Number.isFinite(target.longitude)
+        ) {
+          points.push({ lat: target.latitude, lng: target.longitude });
+        }
+      });
+    } else if (radarFilter === 'threats') {
+      if (motherAircraft && 
+          motherAircraft.latitude !== undefined && 
+          motherAircraft.longitude !== undefined &&
+          Number.isFinite(motherAircraft.latitude) &&
+          Number.isFinite(motherAircraft.longitude)) {
+        threats.forEach((threat) => {
+          const position = calculateThreatPosition(
+            motherAircraft.latitude!,
+            motherAircraft.longitude!,
+            threat.threatRange,
+            threat.threatAzimuth
+          );
+          if (Number.isFinite(position.latitude) && Number.isFinite(position.longitude)) {
+            points.push({ lat: position.latitude, lng: position.longitude });
+          }
+        });
+      }
+    } else {
+      // Mother Node and All Nodes: use mother aircraft position
+      if (motherAircraft && 
+          motherAircraft.latitude !== undefined && 
+          motherAircraft.longitude !== undefined &&
+          Number.isFinite(motherAircraft.latitude) &&
+          Number.isFinite(motherAircraft.longitude)) {
+        return null; // Don't fit bounds, use mother aircraft as center
+      }
+    }
+
+    if (points.length === 0) {
+      return null;
+    }
+
+    const lats = points.map((p) => p.lat);
+    const lngs = points.map((p) => p.lng);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    return [[minLng, minLat], [maxLng, maxLat]] as [[number, number], [number, number]];
+  }, [radarFilter, nodes, targets, threats, motherAircraft, calculateThreatPosition]);
 
   const currentZoom = zoomLevel.radar;
 
@@ -268,6 +446,14 @@ export function RadarView() {
     return udpLayers.map((layer: any) => layer.clone({}));
   }, [udpLayers]);
 
+  // Reset bounds fitting when filter changes
+  useEffect(() => {
+    if (lastFilterRef.current !== radarFilter) {
+      hasFittedBoundsRef.current = false;
+      lastFilterRef.current = radarFilter;
+    }
+  }, [radarFilter]);
+
   // Sync map view state to context
   const flushPendingViewState = () => {
     const pending = pendingViewStateRef.current;
@@ -278,7 +464,11 @@ export function RadarView() {
       setZoom(pending.zoom);
     }
 
-    // Center is fixed to mother aircraft, so don't update center from user interaction
+    // Only update center from user interaction when mother aircraft is NOT defined
+    if (!motherAircraft && pending.longitude !== undefined && pending.latitude !== undefined) {
+      const newCenter: [number, number] = [pending.longitude, pending.latitude];
+      setCenter(newCenter);
+    }
   };
 
   const scheduleFlush = () => {
@@ -291,11 +481,13 @@ export function RadarView() {
 
   const handleMove = (event: any) => {
     if (!event.viewState) return;
-    // Only allow zoom changes, center is fixed to mother aircraft
+    
+    // Allow zoom changes always
+    // Allow center changes only when mother aircraft is NOT defined
     pendingViewStateRef.current = {
       zoom: Math.max(1, Math.min(18, event.viewState.zoom ?? currentZoom)),
-      longitude: currentCenter[0], // Keep center fixed
-      latitude: currentCenter[1], // Keep center fixed
+      longitude: motherAircraft ? currentCenter[0] : (event.viewState.longitude ?? currentCenter[0]), // Keep center fixed if mother aircraft exists
+      latitude: motherAircraft ? currentCenter[1] : (event.viewState.latitude ?? currentCenter[1]), // Keep center fixed if mother aircraft exists
     };
     scheduleFlush();
   };
@@ -304,59 +496,81 @@ export function RadarView() {
     if (!event.viewState) return;
     isUserInteractingRef.current = false;
 
-    // Only allow zoom changes, center is fixed to mother aircraft
+    // Allow zoom changes always
+    // Allow center changes only when mother aircraft is NOT defined
     pendingViewStateRef.current = {
       zoom: Math.max(1, Math.min(18, event.viewState.zoom ?? currentZoom)),
-      longitude: currentCenter[0], // Keep center fixed
-      latitude: currentCenter[1], // Keep center fixed
+      longitude: motherAircraft ? currentCenter[0] : (event.viewState.longitude ?? currentCenter[0]), // Keep center fixed if mother aircraft exists
+      latitude: motherAircraft ? currentCenter[1] : (event.viewState.latitude ?? currentCenter[1]), // Keep center fixed if mother aircraft exists
     };
     flushPendingViewState();
   };
 
-  // Sync context changes to map
+  // Sync context changes to map and fit bounds when no mother aircraft
   useEffect(() => {
     if (isUserInteractingRef.current) return;
     const map = mapRef.current?.getMap();
-    if (!map) return;
+    if (!map || !map.loaded()) return;
 
-    const clampedZoom = Math.max(1, Math.min(18, currentZoom));
-    const currentMapZoom = map.getZoom();
-    const currentMapCenter = map.getCenter();
+    if (motherAircraft) {
+      // Mother aircraft exists - center on it and lock
+      hasFittedBoundsRef.current = false;
+      
+      const clampedZoom = Math.max(1, Math.min(18, currentZoom));
+      const currentMapZoom = map.getZoom();
+      const currentMapCenter = map.getCenter();
 
-    const needsZoom = Math.abs(currentMapZoom - clampedZoom) > 0.01;
-    const needsCenter =
-      Math.abs(currentMapCenter.lng - currentCenter[0]) > 0.0001 ||
-      Math.abs(currentMapCenter.lat - currentCenter[1]) > 0.0001;
+      const needsZoom = Math.abs(currentMapZoom - clampedZoom) > 0.01;
+      const needsCenter =
+        Math.abs(currentMapCenter.lng - currentCenter[0]) > 0.0001 ||
+        Math.abs(currentMapCenter.lat - currentCenter[1]) > 0.0001;
 
-    if (!needsZoom && !needsCenter) return;
+      if (!needsZoom && !needsCenter) return;
 
-    const last = lastAppliedRef.current;
-    if (
-      last &&
-      Math.abs(last.zoom - clampedZoom) < 0.01 &&
-      Math.abs(last.longitude - currentCenter[0]) < 0.0001 &&
-      Math.abs(last.latitude - currentCenter[1]) < 0.0001
-    ) {
-      return;
+      const last = lastAppliedRef.current;
+      if (
+        last &&
+        Math.abs(last.zoom - clampedZoom) < 0.01 &&
+        Math.abs(last.longitude - currentCenter[0]) < 0.0001 &&
+        Math.abs(last.latitude - currentCenter[1]) < 0.0001
+      ) {
+        return;
+      }
+
+      lastAppliedRef.current = {
+        zoom: clampedZoom,
+        longitude: currentCenter[0],
+        latitude: currentCenter[1],
+      };
+
+      map.jumpTo({
+        zoom: clampedZoom,
+        center: currentCenter,
+      });
+    } else if (boundingBox && !hasFittedBoundsRef.current) {
+      // No mother aircraft - fit all nodes/targets in view
+      try {
+        map.fitBounds(boundingBox, {
+          padding: { top: 50, bottom: 50, left: 50, right: 50 },
+          duration: 500,
+        });
+        hasFittedBoundsRef.current = true;
+      } catch (e) {
+        console.error('Error fitting bounds:', e);
+      }
     }
-
-    lastAppliedRef.current = {
-      zoom: clampedZoom,
-      longitude: currentCenter[0],
-      latitude: currentCenter[1],
-    };
-
-    map.jumpTo({
-      zoom: clampedZoom,
-      center: currentCenter,
-    });
-  }, [currentZoom, currentCenter]);
+  }, [currentZoom, currentCenter, motherAircraft, boundingBox]);
 
   return (
     <div 
       className="w-full h-full bg-[#000000] relative overflow-hidden"
       style={{ display: shouldShow ? 'block' : 'none' }}
     >
+      {/* Filter Bar */}
+      {shouldShow && (
+        <RadarFilterBar onFilterChange={setRadarFilter} activeFilter={radarFilter} />
+      )}
+      
       {/* Map with wrong tile URL - DeckGL layers still render! */}
       <div className="absolute inset-0 w-full h-full z-10">
         <Map
@@ -367,13 +581,13 @@ export function RadarView() {
           initialViewState={initialViewState as any}
           minZoom={1}
           maxZoom={18}
-          dragPan={false}
+          dragPan={true} // Always enabled - blocked by overlay when mother aircraft exists
           dragRotate={false}
-          scrollZoom={false}
-          doubleClickZoom={false}
-          touchZoomRotate={false}
+          scrollZoom={true} // Always enabled - blocked by overlay when mother aircraft exists
+          doubleClickZoom={true} // Always enabled - blocked by overlay when mother aircraft exists
+          touchZoomRotate={true} // Always enabled - blocked by overlay when mother aircraft exists
           touchPitch={false}
-          keyboard={false}
+          keyboard={true} // Always enabled - blocked by overlay when mother aircraft exists
           attributionControl={false}
           preserveDrawingBuffer={true}
           onMoveStart={() => {
@@ -395,6 +609,10 @@ export function RadarView() {
         >
           <DeckGLOverlay layers={deckGlLayers} />
         </Map>
+        {/* Overlay div to block panning when mother aircraft exists */}
+        {motherAircraft && (
+          <div className="absolute inset-0 w-full h-full z-20 pointer-events-auto" />
+        )}
       </div>
       
       {/* Radar rings overlay */}

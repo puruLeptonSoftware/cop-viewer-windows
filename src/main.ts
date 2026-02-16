@@ -11,6 +11,9 @@ let opcode101Members: Map<number, any> = new Map();
 let latestTargets: Array<any> = [];
 let latestEngagements: Array<any> = [];
 let latestThreats: Array<any> = [];
+let lastUdpMessageTime: number | null = null;
+let staleCheckInterval: NodeJS.Timeout | null = null;
+const STALE_UDP_TIMEOUT_MS = 5000; // Clear data if no UDP messages for 5 seconds
 
 function promptForUdpConfig(): Promise<{ host: string; port: number }> {
   return new Promise((resolve, reject) => {
@@ -221,6 +224,20 @@ const createWindow = () => {
 function setupUdpClient(host: string, port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
+      // Clear stale check interval if it exists
+      if (staleCheckInterval) {
+        clearInterval(staleCheckInterval);
+        staleCheckInterval = null;
+      }
+      
+      // Clear all stale data when setting up new UDP connection
+      opcode101Members.clear();
+      latestNodes = [];
+      latestTargets = [];
+      latestEngagements = [];
+      latestThreats = [];
+      lastUdpMessageTime = null;
+      
       console.log(`[UDP] Setting up client on ${host}:${port}`);
       udpSocket = dgram.createSocket('udp4');
 
@@ -230,6 +247,9 @@ function setupUdpClient(host: string, port: number): Promise<void> {
       });
 
       udpSocket.on('message', (msg) => {
+        // Update last message time
+        lastUdpMessageTime = Date.now();
+        
         // Convert message to binary string for bit operations (used by opcode 101)
         const isAsciiBinary = msg.every((byte) => byte === 48 || byte === 49);
         const bin = isAsciiBinary
@@ -247,14 +267,40 @@ function setupUdpClient(host: string, port: number): Promise<void> {
         const { opcode, data } = result;
 
         if (opcode === 101) {
-          // Store opcode 101 members in map
+          // Only keep members that are in the current packet - remove stale ones
+          // Create a set of current member IDs
+          const currentMemberIds = new Set(data.map(m => m.globalId));
+          
+          // Remove members that are no longer in the current packet
+          for (const [id] of opcode101Members) {
+            if (!currentMemberIds.has(id)) {
+              opcode101Members.delete(id);
+            }
+          }
+          
+          // Update/add members from current packet
           for (const member of data) {
             opcode101Members.set(member.globalId, member);
           }
+          
           const allMembers = Array.from(opcode101Members.values());
           latestNodes = allMembers;
           sendToRenderer(allMembers);
         } else if (opcode === 102) {
+          // Opcode 102 completely replaces the node list - this removes nodes not in current packet
+          // Also, if a node appears in opcode 101 but not in opcode 102, it should lose mother node status
+          const opcode102Ids = new Set(data.map(m => m.globalId));
+          
+          // Update opcode 101 members: remove mother node status if not in opcode 102
+          for (const [id, member] of opcode101Members) {
+            if (!opcode102Ids.has(id)) {
+              // Node exists in 101 but not in 102 - clear mother node status
+              if (member.internalData) {
+                member.internalData.isMotherAc = 0;
+              }
+            }
+          }
+          
           latestNodes = data;
           sendToRenderer(data);
         } else if (opcode === 103) {
@@ -271,6 +317,34 @@ function setupUdpClient(host: string, port: number): Promise<void> {
 
       udpSocket.bind(port, () => {
         udpSocket?.setBroadcast(true);
+        
+        // Start stale data check interval
+        if (staleCheckInterval) {
+          clearInterval(staleCheckInterval);
+        }
+        
+        staleCheckInterval = setInterval(() => {
+          if (lastUdpMessageTime === null) return;
+          
+          const now = Date.now();
+          if (now - lastUdpMessageTime > STALE_UDP_TIMEOUT_MS) {
+            // UDP has stopped - clear all data
+            console.log('[UDP] No messages received for', STALE_UDP_TIMEOUT_MS, 'ms - clearing stale data');
+            lastUdpMessageTime = null;
+            opcode101Members.clear();
+            latestNodes = [];
+            latestTargets = [];
+            latestEngagements = [];
+            latestThreats = [];
+            
+            // Notify renderer that data has been cleared
+            sendToRenderer([]);
+            sendTargetsToRenderer([]);
+            sendEngagementsToRenderer([]);
+            sendThreatsToRenderer([]);
+          }
+        }, 1000); // Check every second
+        
         resolve();
       });
     } catch (e) {
@@ -309,7 +383,26 @@ function sendThreatsToRenderer(data: any[]): void {
 }
 
 ipcMain.handle('udp-request-latest', async () => {
-  return latestNodes;
+  // Clear mother node status for any nodes that only have opcode 101 data
+  // (opcode 102 is required for mother node status to be valid)
+  const filteredNodes = latestNodes.map(node => {
+    // If node only has opcode 101 data (opcode === 101), clear all opcode 102 metadata including mother node status
+    if (node.opcode === 101) {
+      return {
+        ...node,
+        // Clear opcode 102 metadata - node should be treated as normal network member
+        callsign: undefined,
+        callsignId: undefined,
+        internalData: undefined,
+        radioData: undefined,
+        regionalData: undefined,
+        battleGroupData: undefined,
+      };
+    }
+    // Opcode 102 nodes are fine - they have complete data
+    return node;
+  });
+  return filteredNodes;
 });
 
 ipcMain.handle('udp-request-targets', async () => {

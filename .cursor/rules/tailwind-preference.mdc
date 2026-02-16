@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+description: Prefer Tailwind CSS classes over inline styles
+---
+
+# Tailwind CSS Preference Rule
+
+## Always Use Tailwind CSS
+
+**PREFER Tailwind CSS classes over inline `style` attributes whenever possible.**
+
+### When to Use Tailwind:
+- ✅ Layout (positioning, spacing, sizing)
+- ✅ Colors (background, text, border)
+- ✅ Typography (font size, weight, family)
+- ✅ Spacing (padding, margin)
+- ✅ Flexbox/Grid layouts
+- ✅ Responsive design (breakpoints)
+- ✅ Z-index, opacity, transforms
+
+### When to Use Inline Styles:
+- ❌ Only when Tailwind doesn't have a direct equivalent
+- ❌ Dynamic values that require JavaScript calculations
+- ❌ Complex calculations or conditional styling based on runtime data
+- ❌ CSS properties not available in Tailwind (use `style` as fallback)
+
+### Examples:
+
+**✅ GOOD - Use Tailwind:**
+```tsx
+<div className="absolute top-4 left-4 bg-black text-white p-4 rounded">
+  Content
+</div>
+```
+
+**❌ BAD - Avoid inline styles:**
+```tsx
+<div style={{ position: 'absolute', top: '16px', left: '16px', background: 'black', color: 'white', padding: '16px', borderRadius: '4px' }}>
+  Content
+</div>
+```
+
+**✅ GOOD - Use style for dynamic values:**
+```tsx
+<div className="absolute bg-black" style={{ top: `${calculatedTop}px`, left: `${calculatedLeft}px` }}>
+  Content
+</div>
+```
+
+### Migration Strategy:
+When editing existing code:
+1. Replace inline styles with Tailwind classes
+2. Keep `style` only for dynamic/calculated values
+3. Use `clamp()` and responsive values with Tailwind's responsive utilities when possible

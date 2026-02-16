@@ -58,6 +58,7 @@ export function RightSidebar({
           style={{
             textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
           }}
+          tabIndex={-1}
         >
           Radar
         </button>
@@ -71,21 +72,9 @@ export function RightSidebar({
           style={{
             textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
           }}
+          tabIndex={-1}
         >
           Self
-        </button>
-
-        {/* Altitude Button */}
-        <button
-          data-view-mode="103"
-          onClick={() => viewMode !== 'hud' && onViewModeChange('hud')}
-          disabled={viewMode === 'hud'}
-          className={`${buttonBaseClasses} ${getViewModeButtonClasses('hud')}`}
-          style={{
-            textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
-          }}
-        >
-          Altitude
         </button>
 
         {/* Network Members Button */}
@@ -99,6 +88,7 @@ export function RightSidebar({
           style={{
             textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
           }}
+          tabIndex={-1}
         >
           Network Members
         </button>
@@ -112,6 +102,7 @@ export function RightSidebar({
           style={{
             textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
           }}
+          tabIndex={-1}
         >
           Engagement
         </button>
@@ -127,6 +118,7 @@ export function RightSidebar({
             style={{
               textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
             }}
+            tabIndex={-1}
           >
             Map
           </button>
@@ -143,6 +135,7 @@ export function RightSidebar({
             style={{
               textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
             }}
+            tabIndex={-1}
           >
             −
           </button>
@@ -163,6 +156,7 @@ export function RightSidebar({
             style={{
               textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
             }}
+            tabIndex={-1}
           >
             +
           </button>

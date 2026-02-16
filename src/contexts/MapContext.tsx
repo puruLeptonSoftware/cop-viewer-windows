@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { ViewMode } from '../types';
+import type { RadarFilter } from '../components/shared/RadarFilterBar';
 
 interface MapContextType {
   isMapVisible: boolean;
@@ -19,6 +20,8 @@ interface MapContextType {
   setCenter: (center: [number, number]) => void;
   panEnabled: boolean;
   viewMode: ViewMode;
+  radarFilter: RadarFilter;
+  setRadarFilter: (filter: RadarFilter) => void;
 }
 
 const MapContext = createContext<MapContextType | undefined>(undefined);
@@ -47,6 +50,7 @@ export function MapProvider({ children, viewMode }: MapProviderProps) {
     radar: DEFAULT_CENTER,
     self: DEFAULT_CENTER,
   });
+  const [radarFilter, setRadarFilter] = useState<RadarFilter>('all');
 
   const toggleMap = useCallback(() => {
     setIsMapVisible((prev) => !prev);
@@ -61,12 +65,12 @@ export function MapProvider({ children, viewMode }: MapProviderProps) {
       if (viewMode === 'self-only') {
         return {
           ...prev,
-          self: Math.min(prev.self + 1, MAX_ZOOM),
+          self: Math.min(prev.self + 0.5, MAX_ZOOM),
         };
       } else {
         return {
           ...prev,
-          radar: Math.min(prev.radar + 1, MAX_ZOOM),
+          radar: Math.min(prev.radar + 0.5, MAX_ZOOM),
         };
       }
     });
@@ -77,12 +81,12 @@ export function MapProvider({ children, viewMode }: MapProviderProps) {
       if (viewMode === 'self-only') {
         return {
           ...prev,
-          self: Math.max(prev.self - 1, MIN_ZOOM),
+          self: Math.max(prev.self - 0.5, MIN_ZOOM),
         };
       } else {
         return {
           ...prev,
-          radar: Math.max(prev.radar - 1, MIN_ZOOM),
+          radar: Math.max(prev.radar - 0.5, MIN_ZOOM),
         };
       }
     });
@@ -147,6 +151,8 @@ export function MapProvider({ children, viewMode }: MapProviderProps) {
     setCenter,
     panEnabled,
     viewMode,
+    radarFilter,
+    setRadarFilter,
   };
 
   return <MapContext.Provider value={value}>{children}</MapContext.Provider>;

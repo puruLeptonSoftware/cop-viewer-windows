@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+description: Prevent hardcoded globalId checks, especially globalId === 10
+---
+
+# No Hardcoded GlobalId Checks Rule
+
+## Critical Rule: Never Use Hardcoded GlobalId Values
+
+**NEVER** hardcode `globalId === 10` or any other specific globalId value in the codebase.
+
+### Why This Rule Exists
+
+- Mother aircraft identification should **ONLY** be determined by `internalData.isMotherAc === 1` from opcode 102
+- Hardcoding `globalId === 10` creates incorrect behavior when:
+  - Opcode 102 is not received
+  - Different nodes have different globalIds
+  - The system needs to be flexible for different network configurations
+
+### Correct Pattern
+
+✅ **CORRECT**: Use `isMotherAc` flag from opcode 102
+```typescript
+function isMotherAircraft(point: UDPDataPoint): boolean {
+  return point.internalData?.isMotherAc === 1;
+}
+```
+
+❌ **WRONG**: Never do this
+```typescript
+// NEVER DO THIS
+if (node.globalId === 10) { ... }
+if (node.globalId === 10 || node.internalData?.isMotherAc === 1) { ... }
+```
+
+### Where This Applies
+
+- All component files checking for mother aircraft
+- All utility functions determining node types
+- All filtering/sorting logic for network members
+- Any code that identifies special nodes
+
+### Enforcement
+
+If you see any code checking `globalId === 10` or similar hardcoded values:
+1. Remove the hardcoded check immediately
+2. Replace with `internalData?.isMotherAc === 1` check only
+3. Ensure the logic works correctly when opcode 102 is not received
+
+### Related Files
+
+- [src/components/MainArea/RadarView/UdpLayers.tsx](mdc:src/components/MainArea/RadarView/UdpLayers.tsx) - Uses correct pattern
+- [src/components/MainArea/SelfView/useSelfViewLayers.tsx](mdc:src/components/MainArea/SelfView/useSelfViewLayers.tsx) - Uses correct pattern
+- [src/components/MainArea/Altitude/Altitude.tsx](mdc:src/components/MainArea/Altitude/Altitude.tsx) - Uses correct pattern

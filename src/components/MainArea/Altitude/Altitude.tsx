@@ -4,9 +4,10 @@ import { useMap } from '../../../contexts/MapContext';
 import type { UDPDataPoint } from '../../../utils/types/udp';
 
 // Get mother aircraft node
+// Only treat as mother aircraft if isMotherAc === 1 (from opcode 102)
 const getMotherNode = (nodes: Map<number, UDPDataPoint>): UDPDataPoint | undefined => {
   return Array.from(nodes.values()).find(
-    (node) => node.globalId === 10 || node.internalData?.isMotherAc === 1
+    (node) => node.internalData?.isMotherAc === 1
   );
 };
 

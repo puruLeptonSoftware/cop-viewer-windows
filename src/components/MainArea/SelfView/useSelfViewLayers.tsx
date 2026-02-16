@@ -8,8 +8,9 @@ interface UseSelfViewLayersProps {
 }
 
 // Check if a node is a mother aircraft (from opcode 102)
+// Only treat as mother aircraft if isMotherAc is explicitly 1 (from opcode 102)
 function isMotherAircraft(point: UDPDataPoint): boolean {
-  return point.globalId === 10 || point.internalData?.isMotherAc === 1;
+  return point.internalData?.isMotherAc === 1;
 }
 
 export function useSelfViewLayers({ nodes, visible }: UseSelfViewLayersProps): any[] {

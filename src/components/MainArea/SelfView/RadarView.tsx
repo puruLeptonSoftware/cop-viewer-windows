@@ -1,9 +1,13 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import Map, { useControl } from 'react-map-gl/mapbox';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { useMap } from '../../../contexts/MapContext';
 import { useGetNetworkMembers } from '../../../utils/hooks/useGetNetworkMembers';
 import { useSelfViewLayers } from './useSelfViewLayers';
+import type { UDPDataPoint } from '../../../utils/types/udp';
+import { Tape } from '../../shared/Tape';
+import { MotherAircraftInfoPanel } from '../../shared/MotherAircraftInfoPanel';
+import { StatusIndicators } from '../../shared/StatusIndicators';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 // Deck.gl overlay component
@@ -210,6 +214,7 @@ function CompassOverlay({
         visibility: 'visible',
         opacity: 1,
         transformOrigin: 'center center',
+        transform: 'scale(0.8)',
         transition: 'top 0.1s ease-out, left 0.1s ease-out',
       }}
     >
@@ -427,6 +432,148 @@ function CompassOverlay({
   );
 }
 
+// Calculate bearing between two lat/lng points
+const calculateBearing = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const lat1Rad = (lat1 * Math.PI) / 180;
+  const lat2Rad = (lat2 * Math.PI) / 180;
+
+  const y = Math.sin(dLng) * Math.cos(lat2Rad);
+  const x =
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+
+  let bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  bearing = (bearing + 360) % 360; // Normalize to 0-360
+
+  return bearing;
+};
+
+// Extract flight data from mother aircraft
+const useFlightData = (nodes: Map<number, UDPDataPoint>, mapCenter: [number, number]) => {
+  return useMemo(() => {
+    const motherNode = Array.from(nodes.values()).find(
+      (node) => node.internalData?.isMotherAc === 1
+    );
+    if (!motherNode) {
+      return null;
+    }
+
+    const data: {
+      airspeed: number;
+      groundSpeed: number;
+      altitude: number | undefined;
+      radioAltitude: number;
+      heading: number | undefined;
+      course: number | undefined;
+      verticalSpeed: number;
+      dme: number;
+      pitch: number;
+      roll: number;
+      bearing: number;
+      metadata: {
+        baroAltitude?: number;
+        groundSpeed?: number;
+        mach?: number;
+      };
+      battleGroupData?: {
+        combatEmergency?: number;
+        chaffRemaining?: number;
+        flareRemaining?: number;
+        masterArmStatus?: number;
+        acsStatus?: number;
+        fuel?: number;
+      };
+    } = {
+      airspeed: 148,
+      groundSpeed: 150,
+      altitude: undefined,
+      radioAltitude: 0,
+      heading: undefined,
+      course: undefined,
+      verticalSpeed: -700,
+      dme: 3.7,
+      pitch: 2.8,
+      roll: 0,
+      bearing: 0,
+      metadata: {},
+    };
+
+    // Get lat/lng for bearing calculation
+    if (
+      typeof motherNode.latitude === 'number' &&
+      typeof motherNode.longitude === 'number' &&
+      Number.isFinite(motherNode.latitude) &&
+      Number.isFinite(motherNode.longitude)
+    ) {
+      data.bearing = calculateBearing(mapCenter[1], mapCenter[0], motherNode.latitude, motherNode.longitude);
+    }
+
+    // Get metadata from regionalData
+    if (motherNode.regionalData?.metadata) {
+      data.metadata = {
+        baroAltitude: motherNode.regionalData.metadata.baroAltitude,
+        groundSpeed: motherNode.regionalData.metadata.groundSpeed,
+        mach: motherNode.regionalData.metadata.mach,
+      };
+
+      if (motherNode.regionalData.metadata.baroAltitude !== undefined) {
+        data.altitude = motherNode.regionalData.metadata.baroAltitude;
+      } else if (motherNode.altitude !== undefined) {
+        data.altitude = motherNode.altitude;
+      }
+
+      if (motherNode.regionalData.metadata.groundSpeed !== undefined) {
+        data.groundSpeed = motherNode.regionalData.metadata.groundSpeed;
+      }
+    } else if (motherNode.altitude !== undefined) {
+      data.altitude = motherNode.altitude;
+    }
+
+    // Get heading - normalize to 0-360 range (same as RadarView)
+    if (typeof motherNode.trueHeading === 'number' && Number.isFinite(motherNode.trueHeading)) {
+      let normalizedHeading = motherNode.trueHeading;
+      while (normalizedHeading < 0) normalizedHeading += 360;
+      while (normalizedHeading >= 360) normalizedHeading -= 360;
+      data.heading = normalizedHeading;
+      data.course = (normalizedHeading + 9) % 360;
+    } else if (typeof motherNode.heading === 'number' && Number.isFinite(motherNode.heading)) {
+      let normalizedHeading = motherNode.heading;
+      while (normalizedHeading < 0) normalizedHeading += 360;
+      while (normalizedHeading >= 360) normalizedHeading -= 360;
+      data.heading = normalizedHeading;
+      data.course = (normalizedHeading + 9) % 360;
+    }
+
+    // Calculate radio altitude
+    if (typeof data.altitude === 'number') {
+      data.radioAltitude = Math.max(0, data.altitude - 20);
+    }
+
+    // Get battle group data
+    if (motherNode.battleGroupData) {
+      data.battleGroupData = {
+        combatEmergency: motherNode.battleGroupData.combatEmergency,
+        chaffRemaining: motherNode.battleGroupData.chaffRemaining,
+        flareRemaining: motherNode.battleGroupData.flareRemaining,
+        masterArmStatus: motherNode.battleGroupData.masterArmStatus,
+        acsStatus: motherNode.battleGroupData.acsStatus,
+        fuel: motherNode.battleGroupData.fuel,
+      };
+    }
+
+    return data;
+  }, [nodes, mapCenter]);
+};
+
+// Top Section Component - Removed (static values)
+
+
+// Combined Mother Aircraft Info Panel - Now includes flight data
+
+// Bottom Right Data Block
+// Bottom Right Data Block - Now integrated into FlightDataPanel
+
 
 export function RadarView() {
   const { isMapVisible, viewMode, zoomLevel, center, setCenter } = useMap();
@@ -444,10 +591,14 @@ export function RadarView() {
   const currentZoom = zoomLevel.self;
   const currentCenter = center.self;
 
+  // Get flight data for altitude screen features
+  const flightData = useFlightData(nodes, currentCenter);
+
   // Get mother aircraft data (from opcode 102 where isMotherAc == 1)
+  // Only treat as mother aircraft if isMotherAc === 1 (from opcode 102)
   const motherAircraft = useMemo(() => {
     return Array.from(nodes.values()).find(
-      (node) => node.globalId === 10 || node.internalData?.isMotherAc === 1
+      (node) => node.internalData?.isMotherAc === 1
     );
   }, [nodes]);
 
@@ -470,7 +621,30 @@ export function RadarView() {
     return currentHeading;
   }, [motherAircraft]);
 
-  // Calculate mother aircraft info for display (matching old self screen)
+  // Debounce showing "No mother aircraft" overlay to prevent flickering during transitions
+  const [showNoMotherAircraftOverlay, setShowNoMotherAircraftOverlay] = useState(false);
+  
+  useEffect(() => {
+    // Only show overlay in self-only mode and when map is off
+    if (viewMode !== 'self-only' || isMapVisible) {
+      setShowNoMotherAircraftOverlay(false);
+      return;
+    }
+
+    if (!motherAircraft) {
+      // Delay showing overlay to prevent flickering during transitions
+      const timer = setTimeout(() => {
+        setShowNoMotherAircraftOverlay(true);
+      }, 500); // 500ms delay
+
+      return () => clearTimeout(timer);
+    } else {
+      // Hide immediately when mother aircraft appears
+      setShowNoMotherAircraftOverlay(false);
+    }
+  }, [motherAircraft, viewMode, isMapVisible]);
+
+  // Calculate mother aircraft info for display
   const motherAircraftInfo = useMemo(() => {
     if (!motherAircraft) return null;
 
@@ -479,22 +653,24 @@ export function RadarView() {
     const groundSpeed = metadata.groundSpeed;
     const mach = metadata.mach;
     
-    // Fallback to direct node properties
-    const finalBaroAltitude = baroAltitude !== undefined ? baroAltitude : motherAircraft.altitude;
+    // Use same altitude logic as tape: baroAltitude first, then fallback to altitude
+    const finalAltitude = baroAltitude !== undefined ? baroAltitude : motherAircraft.altitude;
     const finalGroundSpeed = groundSpeed;
     const finalMach = mach;
     
     const callsign = motherAircraft.callsign || null;
+    const callsignId = motherAircraft.callsignId;
     const isMotherAc = motherAircraft.internalData?.isMotherAc === 1;
 
     return {
       globalId: motherAircraft.globalId,
       callsign,
+      callsignId,
       isMotherAc,
       latitude: motherAircraft.latitude,
       longitude: motherAircraft.longitude,
-      altitude: motherAircraft.altitude,
-      baroAltitude: finalBaroAltitude,
+      altitude: finalAltitude, // Use same logic as tape
+      baroAltitude,
       groundSpeed: finalGroundSpeed,
       mach: finalMach,
     };
@@ -601,96 +777,50 @@ export function RadarView() {
       className="w-full h-full bg-[#000000] relative overflow-hidden"
       style={{ display: shouldShow ? 'block' : 'none' }}
     >
-      {/* Mother Aircraft Info Panel - Top Left (matching old self screen) */}
-      {motherAircraftInfo && (
-        <div className="fixed top-[clamp(10px,1.5vh,15px)] left-[clamp(10px,1.5vw,15px)] z-[1000] pointer-events-none bg-[rgba(20,20,20,0.98)] border-2 border-white rounded p-[clamp(6px,0.8vh,8px)_clamp(8px,1vw,10px)] text-white font-mono text-sm font-bold max-w-[clamp(220px,25vw,280px)] min-w-[180px]">
-          {/* NETWORK NODE header */}
-          <div className="text-white font-black mb-1 text-base border-b border-white pb-0.5">
-            NETWORK NODE {motherAircraftInfo.globalId}
-          </div>
+      <style>{`
+        @keyframes hud-blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0.25; }
+        }
+      `}</style>
 
-          {/* CALLSIGN */}
-          {motherAircraftInfo.callsign && (
-            <div className="text-white font-extrabold mb-0.5 text-sm">
-              CALLSIGN: {motherAircraftInfo.callsign}
-            </div>
-          )}
+      {/* Altitude Screen Features */}
+      {flightData && (
+        <>
+          <Tape
+            label="Speed"
+            currentValue={
+              flightData.metadata?.groundSpeed !== undefined
+                ? Math.round(flightData.metadata.groundSpeed)
+                : typeof flightData.groundSpeed === 'number'
+                  ? Math.round(flightData.groundSpeed)
+                  : null
+            }
+            step={10}
+            numValues={12}
+            position="left"
+          />
+          <Tape
+            label="ALT (FT)"
+            currentValue={flightData.altitude !== undefined ? Math.round(flightData.altitude) : null}
+            step={100}
+            numValues={10}
+            position="right"
+          />
+          <StatusIndicators
+            data={flightData}
+            className="fixed top-[15px] right-[170px] z-[1000] pointer-events-none"
+          />
+        </>
+      )}
 
-          {/* MOTHER AIRCRAFT indicator */}
-          {motherAircraftInfo.isMotherAc && (
-            <div className="text-white font-extrabold mb-0.5 text-sm">
-              MOTHER AIRCRAFT
-            </div>
-          )}
-
-          {/* POSITION section */}
-          {motherAircraftInfo.latitude !== undefined && motherAircraftInfo.longitude !== undefined && (
-            <div className="mt-1">
-              <div className="text-white font-extrabold mb-0.5 text-sm">
-                POSITION:
-              </div>
-              <div className="text-white leading-snug text-sm ml-0.5 font-bold">
-                <div>
-                  Lat:{' '}
-                  <span className="text-white font-extrabold">
-                    {motherAircraftInfo.latitude.toFixed(5)}°
-                  </span>
-                </div>
-                <div>
-                  Lng:{' '}
-                  <span className="text-white font-extrabold">
-                    {motherAircraftInfo.longitude.toFixed(5)}°
-                  </span>
-                </div>
-                {motherAircraftInfo.altitude !== undefined && (
-                  <div>
-                    Alt:{' '}
-                    <span className="text-white font-extrabold">
-                      {motherAircraftInfo.altitude}ft
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* META section */}
-          {(motherAircraftInfo.baroAltitude !== undefined ||
-            motherAircraftInfo.groundSpeed !== undefined ||
-            motherAircraftInfo.mach !== undefined) && (
-            <div className="mt-1">
-              <div className="text-white font-extrabold mb-0.5 text-sm">
-                META:
-              </div>
-              <div className="text-white leading-snug text-sm ml-0.5 font-bold">
-                {motherAircraftInfo.baroAltitude !== undefined && (
-                  <div>
-                    BA:{' '}
-                    <span className="text-white font-extrabold">
-                      {motherAircraftInfo.baroAltitude}
-                    </span>
-                  </div>
-                )}
-                {motherAircraftInfo.groundSpeed !== undefined && (
-                  <div>
-                    GS:{' '}
-                    <span className="text-white font-extrabold">
-                      {motherAircraftInfo.groundSpeed}
-                    </span>
-                  </div>
-                )}
-                {motherAircraftInfo.mach !== undefined && (
-                  <div>
-                    M:{' '}
-                    <span className="text-white font-extrabold">
-                      {motherAircraftInfo.mach}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Combined Mother Aircraft Info Panel - Top Left */}
+      {motherAircraftInfo && flightData && (
+        <MotherAircraftInfoPanel
+          motherAircraftInfo={motherAircraftInfo}
+          flightData={flightData}
+          className="fixed top-[15px] left-[15px] z-[1000] pointer-events-none"
+        />
       )}
 
       {/* Map for coordinate system - visible but with transparent tiles so deck.gl layers render */}
@@ -754,6 +884,26 @@ export function RadarView() {
           <DeckGLOverlay layers={udpLayers} />
         </Map>
       </div>
+      
+      {/* Translucent overlay when no mother aircraft (debounced to prevent flickering) */}
+      {showNoMotherAircraftOverlay && (
+        <div
+          className="absolute inset-0 w-full h-full z-[1001] flex items-center justify-center pointer-events-none"
+          style={{
+            background: 'rgba(0, 0, 0, 0.7)',
+          }}
+        >
+          <div
+            className="text-white font-bold text-4xl"
+            style={{
+              textShadow: '0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5), 2px 2px 4px rgba(0, 0, 0, 0.9)',
+              letterSpacing: '2px',
+            }}
+          >
+            No mother aircraft
+          </div>
+        </div>
+      )}
       
       {/* Compass overlay - fixed size, centered on container when map off, on mother aircraft when map on */}
       {motherAircraft && (

@@ -231,9 +231,7 @@ const SquareGrid = ({
   if (!items || items.length === 0) return null;
   return (
     <div>
-      <div className="mb-2 text-2xl font-bold tracking-wider text-white">
-        {title}: {items.length}
-      </div>
+
       <div className="grid grid-cols-8 gap-[3px]">
         {items.map((item, idx) => {
           const bgColor = getValueColor(item.value);
@@ -259,6 +257,7 @@ const SquareGrid = ({
 export function NetworkMembers() {
   const { nodes } = useGetNetworkMembers();
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [activeView, setActiveView] = useState<'info' | 'heading' | 'machinery'>('info');
 
   // Filter to only show nodes with opcode 101 or 102 (same as RadarView)
   const members = useMemo(() => {
@@ -305,11 +304,12 @@ export function NetworkMembers() {
       `}</style>
       <div className="flex h-full flex-row">
         {/* Left Panel - Aircraft Image */}
-        <div className="flex flex-shrink-0 items-center justify-center bg-black/40 p-[clamp(10px,2vw,20px)] box-border" style={{ width: 'clamp(280px, 35vw, 500px)' }}>
+        <div className="flex flex-shrink-0 items-center justify-center bg-black/40 p-[clamp(10px,2vw,20px)] box-border" style={{ width: 'clamp(240px, 28vw, 400px)' }}>
           <img
             src="aircraft-layout.png"
             alt="Aircraft layout"
             className="max-w-[95%] max-h-[95%] w-auto h-auto object-contain block opacity-100"
+            style={{ maxWidth: '95%', maxHeight: '95%' }}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
@@ -317,12 +317,12 @@ export function NetworkMembers() {
         </div>
 
         {/* Right Panel - Network Members Grid */}
-        <div className="relative flex flex-1 flex-col gap-4 p-4 border-l border-white/10 min-w-0" style={{ maxWidth: 'calc(100% - clamp(280px, 35vw, 500px))' }}>
+        <div className="relative flex flex-1 flex-col gap-4 p-4  min-w-0" style={{ maxWidth: 'calc(100% - clamp(240px, 28vw, 400px))' }}>
           <div className="flex items-center justify-between border-b border-white/20 pb-3">
-            <h2 className="text-lg font-bold tracking-wider text-white">
+            <h2 className="text-xl font-bold tracking-wider text-white">
               Network Members
             </h2>
-            <span className="text-xs text-white/60">
+            <span className="text-sm text-white/80 font-semibold">
               {members.length} active
             </span>
           </div>
@@ -351,19 +351,19 @@ export function NetworkMembers() {
                     key={member.globalId}
                     type="button"
                     onClick={() => setSelectedId(member.globalId)}
-                    className={`w-full rounded-md p-3 text-left transition-all duration-200 cursor-pointer ${
+                    className={`w-full rounded-md p-4 text-left transition-all duration-200 cursor-pointer ${
                       isSelected
-                        ? 'border border-green-500 bg-green-500/10'
-                        : 'border border-green-500/40 bg-[rgba(0,30,0,0.45)] hover:border-green-500 hover:bg-[rgba(0,40,0,0.55)]'
+                        ? 'border-2 border-green-500 bg-green-500/20'
+                        : 'border-2 border-green-500/50 bg-[rgba(0,30,0,0.6)] hover:border-green-500 hover:bg-[rgba(0,50,0,0.7)]'
                     }`}
                   >
-                    <div className="flex items-center justify-between text-xs font-semibold text-[#00ff88]">
-                      <span>GID {member.globalId}</span>
+                    <div className="flex items-center justify-between text-lg font-bold text-[#00ff88]">
+                      <span className="tracking-wide">GID {member.globalId}</span>
                       {member.internalData?.isMotherAc === 1 && (
-                        <span className="text-[#ffaa00]">MOTHER</span>
+                        <span className="text-[#ffaa00] text-lg font-bold">MOTHER</span>
                       )}
                     </div>
-                    <div className="mt-2 flex flex-col gap-1 text-[11px] text-white/80">
+                    <div className="mt-3 flex flex-col gap-1.5 text-[16px] text-white/90 font-semibold">
                       {typeof lat === 'number' && <div>LAT {lat.toFixed(6)}</div>}
                       {typeof lng === 'number' && <div>LON {lng.toFixed(6)}</div>}
                       {typeof alt === 'number' && <div>ALT {alt.toFixed(0)}</div>}
@@ -561,31 +561,76 @@ export function NetworkMembers() {
                         Node {selected.globalId} - {callsignLabel}
                       </div>
                       <div className="flex items-center gap-2">
-                        {fuel !== undefined && (
-                          <span className="rounded px-2 py-1 text-xs font-bold text-black bg-[#16a34a]">
+                      {fuel !== undefined && (
+                          <span className="rounded-md px-3 py-1.5 text-sm font-bold text-black bg-[#16a34a] border-2 border-[#16a34a]">
                             FUEL:{fuel.toFixed(0)}%
                           </span>
                         )}
                         {acsStatus !== undefined && (
                           <span
-                            className="rounded px-2 py-1 text-xs font-bold"
+                            className="rounded-md px-3 py-1.5 text-sm font-bold border-2"
                             style={{
                               background: getACSColor(acsStatus),
                               color: getACSTextColor(acsStatus),
+                              borderColor: getACSColor(acsStatus),
                             }}
                           >
                             ACS:{acsStatus}
                           </span>
                         )}
                         {masterArm !== undefined && (
-                          <span className="rounded px-2 py-1 text-xs font-bold text-white bg-[#ea580c]">
+                          <span className="rounded-md px-3 py-1.5 text-sm font-bold text-white bg-[#ea580c] border-2 border-[#ea580c]">
                             {masterArm ? 'ARM' : 'SAFE'}
                           </span>
                         )}
+                      </div>
+                      <div className="flex items-center gap-3" style={{zoom:0.9}}>
                         <button
                           type="button"
-                          onClick={() => setSelectedId(null)}
-                          className="rounded border border-green-500/40 px-3 py-1 text-xs font-semibold text-green-500 bg-transparent cursor-pointer hover:border-green-500 hover:bg-green-500/10"
+                          onClick={() => setActiveView('info')}
+                          className={`px-4 py-2 h-8 md:h-10 text-[11px] md:text-[13px] font-semibold rounded cursor-pointer transition-all duration-200 text-white flex items-center justify-center hover:opacity-90 ${
+                            activeView === 'info' ? 'bg-[#4488ff]' : 'bg-[#2a2a35]'
+                          }`}
+                          style={{
+                            textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
+                          }}
+                        >
+                          Info
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveView('heading')}
+                          className={`px-4 py-2 h-8 md:h-10 text-[11px] md:text-[13px] font-semibold rounded cursor-pointer transition-all duration-200 text-white flex items-center justify-center hover:opacity-90 ${
+                            activeView === 'heading' ? 'bg-[#4488ff]' : 'bg-[#2a2a35]'
+                          }`}
+                          style={{
+                            textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
+                          }}
+                        >
+                          Heading
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveView('machinery')}
+                          className={`px-4 py-2 h-8 md:h-10 text-[11px] md:text-[13px] font-semibold rounded cursor-pointer transition-all duration-200 text-white flex items-center justify-center hover:opacity-90 ${
+                            activeView === 'machinery' ? 'bg-[#4488ff]' : 'bg-[#2a2a35]'
+                          }`}
+                          style={{
+                            textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
+                          }}
+                        >
+                          Machinery
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedId(null);
+                            setActiveView('info');
+                          }}
+                          className="px-4 py-2 h-8 md:h-10 text-[11px] md:text-[13px] font-semibold rounded cursor-pointer transition-all duration-200 text-white flex items-center justify-center hover:opacity-90 bg-[#2a2a35]"
+                          style={{
+                            textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
+                          }}
                         >
                           Back
                         </button>
@@ -595,73 +640,99 @@ export function NetworkMembers() {
                     <div
                       className="network-members-scroll flex-1 flex flex-col gap-4 pr-2 min-h-0"
                     >
-                      {/* Top area: radar + weapons/sensors side by side, scrollable */}
-                      <div className="flex flex-row gap-4 items-center overflow-hidden pb-1 flex-shrink-0" style={{ zoom: 0.6 }}>
-                        {/* Radar Section */}
-                        <div className="rounded-md bg-black/60 p-4 flex-none min-w-[280px]" style={{ zoom: 1.4 }}>
-                          {(heading !== undefined ||
-                            selected.battleGroupData?.radarZoneCoverageAz !==
-                              undefined ||
-                            selected.battleGroupData?.radarZoneCenterAz !==
-                              undefined) && (
-                            <RadarCanvas
-                              heading={heading}
-                              coverageAz={selected.battleGroupData?.radarZoneCoverageAz}
-                              coverageEl={selected.battleGroupData?.radarZoneCoverageEl}
-                              centerAz={selected.battleGroupData?.radarZoneCenterAz}
-                              centerEl={selected.battleGroupData?.radarZoneCenterEl}
-                            />
-                          )}
+                      {/* INFO View: Network member info in 3 columns */}
+                      {activeView === 'info' && (
+                        <div className="rounded-md bg-black/60 p-4 flex-1 min-h-0 overflow-y-auto w-full box-border" style={{zoom:0.8}}>
+                            <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+                              {infoRows.map((row) => (
+                                <div
+                                  key={row.label}
+                                  className="flex items-center justify-between gap-3 border-b border-white/20 py-[4px] text-[15px] text-white/90"
+                                >
+                                  <span
+                                    className="text-[20px] font-bold min-w-[120px]"
+                                    style={{
+                                      color: '#00ff00',
+                                      textShadow: '0 0 6px rgba(0, 255, 0, 0.6)',
+                                    }}
+                                  >
+                                    {row.label}:
+                                  </span>
+                                  <span
+                                    className="font-bold text-white text-right flex-1 text-[20px]"
+                                    style={{
+                                      textShadow: '0 0 6px rgba(255, 255, 255, 0.4), 1px 1px 3px #000000',
+                                    }}
+                                  >
+                                    {row.value}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                         </div>
+                      )}
 
-                        {/* Weapons and Sensors Section (scrollable) */}
-                        {(showWeapons || showSensors) && (
-                          <div className="flex flex-col gap-4 flex-1 max-h-[360px] overflow-y-auto pr-1">
-                            {showWeapons && (
-                              <SquareGrid
-                                title="WEAPONS"
-                                items={weaponsData}
-                              />
-                            )}
-                            {showSensors && (
-                              <SquareGrid
-                                title="SENSORS"
-                                items={sensorsData}
-                              />
+                      {/* HEADING View: Big compass centered */}
+                      {activeView === 'heading' && (
+                        <div className="flex-1 flex items-center justify-center min-h-0">
+                          <div className="rounded-md bg-black/80 p-4 w-full h-full flex items-center justify-center">
+                            {(heading !== undefined ||
+                              selected.battleGroupData?.radarZoneCoverageAz !==
+                                undefined ||
+                              selected.battleGroupData?.radarZoneCenterAz !==
+                                undefined) && (
+                              <div style={{ zoom: 1.5 }}>
+                                <RadarCanvas
+                                  heading={heading}
+                                  coverageAz={selected.battleGroupData?.radarZoneCoverageAz}
+                                  coverageEl={selected.battleGroupData?.radarZoneCoverageEl}
+                                  centerAz={selected.battleGroupData?.radarZoneCenterAz}
+                                  centerEl={selected.battleGroupData?.radarZoneCenterEl}
+                                />
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
-
-                      {/* Info Section (scrollable) */}
-                      <div className="rounded-md bg-black/60 p-4 flex-1 min-h-0 overflow-y-auto w-full box-border">
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                          {infoRows.map((row) => (
-                            <div
-                              key={row.label}
-                              className="flex items-center justify-between gap-3 border-b border-white/10 py-[3px] text-[12px] text-white/80"
-                            >
-                              <span
-                                className="text-[13px] font-semibold min-w-[110px]"
-                                style={{
-                                  color: '#00ff00',
-                                  textShadow: '0 0 4px rgba(0, 255, 0, 0.5)',
-                                }}
-                              >
-                                {row.label}:
-                              </span>
-                              <span
-                                className="font-bold text-white text-right flex-1 text-[13px]"
-                                style={{
-                                  textShadow: '0 0 4px rgba(255, 255, 255, 0.3), 1px 1px 2px #000000',
-                                }}
-                              >
-                                {row.value}
-                              </span>
-                            </div>
-                          ))}
                         </div>
-                      </div>
+                      )}
+
+                      {/* MACHINERY View: Only sensors and weapons */}
+                      {activeView === 'machinery' && (
+                        <div className="rounded-md bg-black/60 p-4 flex-1 min-h-0 overflow-y-auto w-full box-border">
+                          <div className="flex flex-col gap-6">
+                            {/* Sensors Section */}
+                            {showSensors && (
+                              <div>
+                                <div className="text-xl font-bold text-white mb-4 border-b border-white/20 pb-2">
+                                  SENSORS: {sensorsData.length}
+                                </div>
+                                <SquareGrid
+                                  title=""
+                                  items={sensorsData}
+                                />
+                              </div>
+                            )}
+
+                            {/* Weapons Section */}
+                            {showWeapons && (
+                              <div>
+                                <div className="text-xl font-bold text-white mb-4 border-b border-white/20 pb-2">
+                                  WEAPONS: {weaponsData.length}
+                                </div>
+                                <SquareGrid
+                                  title=""
+                                  items={weaponsData}
+                                />
+                              </div>
+                            )}
+
+                            {!showSensors && !showWeapons && (
+                              <div className="flex items-center justify-center text-white/60 text-lg">
+                                No sensors or weapons data available
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 );

@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
-import { IconLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { IconLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import type { UDPDataPoint, ThreatData } from '../../../utils/types/udp';
 import type { TargetData } from '../../../utils/hooks/useGetTargets';
+import type { RadarFilter } from '../../shared/RadarFilterBar';
 
 interface UdpLayersProps {
   nodes: Map<number, UDPDataPoint>;
   targets?: TargetData[];
   threats?: ThreatData[];
   visible: boolean;
+  filter?: RadarFilter;
 }
 
 // Helper function to calculate threat position from mother aircraft
@@ -51,11 +53,12 @@ function calculateThreatPosition(
 }
 
 // Check if a node is a mother aircraft
+// Only treat as mother aircraft if isMotherAc is explicitly 1 (from opcode 102)
 function isMotherAircraft(point: UDPDataPoint): boolean {
-  return point.globalId === 10 || point.internalData?.isMotherAc === 1;
+  return point.internalData?.isMotherAc === 1;
 }
 
-export function useUdpLayers({ nodes, targets = [], threats = [], visible }: UdpLayersProps): any[] {
+export function useUdpLayers({ nodes, targets = [], threats = [], visible, filter = 'all' }: UdpLayersProps): any[] {
   const layers = useMemo(() => {
     if (!visible) {
       return [];
@@ -78,6 +81,7 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible }: Udp
         if (isMotherAircraft(point)) {
           motherAircraftData.push(nodeData);
         } else {
+          // Only add to networkMemberData if filter is not 'network-members' OR if it is 'network-members' (will be filtered later)
           networkMemberData.push(nodeData);
         }
       });
@@ -109,8 +113,7 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible }: Udp
         }),
         getPosition: (d: any) => d.position,
         getSize: iconSize,
-        // Use same heading logic as self screen: normalize and negate to flip rotation direction
-        // COMMENTED OUT: Icons should not rotate in radar view - just show icon without rotation
+        // Rotate icons based on trueHeading
         // getAngle: (d: any) => {
         //   const heading = d.heading ?? 0;
         //   // Normalize to 0-360 first
@@ -126,13 +129,13 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible }: Udp
         sizeScale: 1,
         getPixelOffset: [0, 0],
         alphaCutoff: 0.001,
-        billboard: true,
+        billboard: false, // Set to false to allow rotation
         sizeUnits: 'pixels',
         sizeMinPixels: 20,
         sizeMaxPixels: 64,
         updateTriggers: {
           getIcon: iconUrl,
-          // getAngle: nodeData.map(d => d.heading).join(','), // Commented out - no rotation
+          getAngle: nodeData.map(d => d.heading).join(','), // Include heading in update triggers
           data: nodeData.length,
         },
         onError: (error: any) => {
@@ -187,21 +190,86 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible }: Udp
     // Return layers in order: glow -> mother icon -> members
     const orderedLayers: any[] = [];
 
-    // Glow layer first (behind)
-    if (motherAircraftGlowLayer) {
+    // Apply filter logic
+    // When 'network-members' is selected, explicitly exclude mother node
+    const showMotherNode = filter === 'all' || filter === 'mother-node' || filter === 'network-members';
+    const showNetworkMembers = filter === 'all' || filter === 'network-members';
+    const showTargets = filter === 'all' || filter === 'targets';
+    const showThreats = filter === 'all' || filter === 'threats';
+
+    // Glow layer first (behind) - only show when mother node filter is active
+    if (showMotherNode && motherAircraftGlowLayer) {
       orderedLayers.push(motherAircraftGlowLayer);
     }
 
-    if (motherAircraftLayer) {
+    // Mother aircraft layer - only show when mother node filter is active (explicitly excluded for network-members)
+    if (showMotherNode && motherAircraftLayer) {
       orderedLayers.push(motherAircraftLayer);
     }
+    
+    // Add text labels for mother aircraft (Global ID) - above icon, rendered after icon layer
+    if (showMotherNode && motherAircraftData.length > 0) {
+      const motherAircraftTextLayer = new TextLayer({
+        id: 'mother-aircraft-text-layer',
+        data: motherAircraftData,
+        pickable: false,
+        getPosition: (d: any) => d.position,
+          getText: (d: any) => `ID${d.globalId}`,
+        getSize: 16,
+        getColor: [255, 255, 255, 255], // White text for better visibility
+        getAngle: 0, // No rotation - always horizontal
+        getTextAnchor: 'middle',
+        getAlignmentBaseline: 'bottom',
+        sizeScale: 1.2,
+        sizeUnits: 'pixels',
+        billboard: true, // Always face camera
+        getPixelOffset: [0, -20], // Offset above icon (20 pixels up)
+        outlineColor: [0, 191, 255, 255], // Bright blue border (RGB: 0, 191, 255 - dodger blue)
+        outlineWidth: 3, // Thicker border for better visibility
+        fontWeight: 'bold',
+        updateTriggers: {
+          getText: motherAircraftData.map(d => d.globalId).join(','),
+          data: motherAircraftData.length,
+        },
+      });
+      orderedLayers.push(motherAircraftTextLayer);
+    }
 
-    if (networkMemberLayer) {
+    // Network members layer - only show when network-members filter is active (excludes mother node)
+    if (showNetworkMembers && networkMemberLayer) {
       orderedLayers.push(networkMemberLayer);
+    }
+    
+    // Add text labels for network members (Global ID) - above icons, rendered after icon layer
+    if (showNetworkMembers && networkMemberData.length > 0) {
+      const networkMemberTextLayer = new TextLayer({
+        id: 'network-member-text-layer',
+        data: networkMemberData,
+        pickable: false,
+        getPosition: (d: any) => d.position,
+          getText: (d: any) => `ID${d.globalId}`,
+        getSize: 16,
+        getColor: [255, 255, 255, 255], // White text for better visibility
+        getAngle: 0, // No rotation - always horizontal
+        getTextAnchor: 'middle',
+        getAlignmentBaseline: 'bottom',
+        sizeScale: 1.2,
+        sizeUnits: 'pixels',
+        billboard: true, // Always face camera
+        getPixelOffset: [0, -28], // Offset above icon (20 pixels up)
+        outlineColor: [0, 191, 255, 255], // Bright blue border (RGB: 0, 191, 255 - dodger blue)
+        outlineWidth: 3, // Thicker border for better visibility
+        fontWeight: 'bold',
+        updateTriggers: {
+          getText: networkMemberData.map(d => d.globalId).join(','),
+          data: networkMemberData.length,
+        },
+      });
+      orderedLayers.push(networkMemberTextLayer);
     }
 
     // Add targets layer (opcode 104) - using hostile aircraft icon
-    if (targets.length > 0) {
+    if (showTargets && targets.length > 0) {
       const targetData = targets
         .filter((target) => target.latitude !== undefined && target.longitude !== undefined)
         .map((target) => ({
@@ -224,10 +292,11 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible }: Udp
     }
 
     // Add threats layer (opcode 106) - calculate positions from mother aircraft
-    if (threats.length > 0) {
+    if (showThreats && threats.length > 0) {
       // Get mother aircraft position
+      // Only treat as mother aircraft if isMotherAc === 1 (from opcode 102)
       const motherAircraft = Array.from(nodes.values()).find(
-        (node) => node.globalId === 10 || node.internalData?.isMotherAc === 1
+        (node) => node.internalData?.isMotherAc === 1
       );
 
       if (motherAircraft && 
@@ -306,7 +375,7 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible }: Udp
     }
 
     return orderedLayers;
-  }, [nodes, targets, threats, visible]);
+  }, [nodes, targets, threats, visible, filter]);
 
   return layers;
 }
