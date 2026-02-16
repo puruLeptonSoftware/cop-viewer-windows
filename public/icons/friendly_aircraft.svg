@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny"
+     width="47.2" height="51.2" viewBox="41 26 118 128">
+
+  <defs>
+    <!-- Circular background gradient (like your screenshot) -->
+    <radialGradient id="circleGrad" cx="50%" cy="45%" r="65%">
+      <stop offset="0%"  stop-color="#66F0FF" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#1FA7FF" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#083BFF" stop-opacity="0.00"/>
+    </radialGradient>
+
+    <!-- Soft glow/bloom -->
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Icon fill (keep it nice) -->
+    <linearGradient id="blueFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgb(190,245,255)"/>
+      <stop offset="100%" stop-color="rgb(90,180,235)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Circular gradient background -->
+  <!-- center of viewBox is (100, 90); tweak r for bigger/smaller halo -->
+  <circle cx="100" cy="90" r="58" fill="url(#circleGrad)" filter="url(#softGlow)"/>
+
+  <!-- Original icon -->
+  <path
+    d="M 155,150 C 155,50 115,30 100,30 85,30 45,50 45,150"
+    stroke-width="4"
+    stroke="black"
+    fill="url(#blueFill)"
+    fill-opacity="1" />
+
+  <path
+    d="m 60,84 40,20 40,-20 0,8 -40,25 -40,-25 z"
+    stroke-width="3"
+    stroke="none"
+    fill="black" />
+
+  <text
+    x="100" y="71"
+    text-anchor="middle"
+    font-size="28"
+    font-family="Arial"
+    font-weight="bold"
+    dominant-baseline="middle"
+    fill="black">
+    A
+  </text>
+</svg>

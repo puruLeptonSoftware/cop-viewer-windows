@@ -1,0 +1,83 @@
+{
+  "name": "cop-viewer-by-puru",
+  "productName": "COP Viewer by Puru",
+  "version": "1.0.0",
+  "description": "Electron React Hello World App",
+  "main": ".vite/build/main.js",
+  "author": {
+    "name": "puruLeptonSoftware",
+    "email": "puru.bhargava@leptonsoftware.com"
+  },
+  "license": "MIT",
+  "scripts": {
+    "clean": "node scripts/clean.js",
+    "predev": "npm run clean",
+    "prepackage": "npm run clean",
+    "start": "electron-forge start",
+    "dev": "electron-forge start",
+    "build": "electron-builder --win",
+    "dist": "electron-builder",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "lint": "eslint --ext .ts,.tsx ."
+  },
+  "keywords": [
+    "electron",
+    "react",
+    "typescript"
+  ],
+  "devDependencies": {
+    "@electron-forge/cli": "^7.9.0",
+    "@electron-forge/maker-deb": "^7.9.0",
+    "@electron-forge/maker-rpm": "^7.9.0",
+    "@electron-forge/maker-squirrel": "^7.9.0",
+    "@electron-forge/maker-zip": "^7.9.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.9.0",
+    "@electron-forge/plugin-fuses": "^7.9.0",
+    "@electron-forge/plugin-vite": "^7.9.0",
+    "@electron/fuses": "^1.8.0",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "electron": "38.1.0",
+    "electron-builder": "^26.4.0",
+    "eslint": "^8.57.1",
+    "eslint-plugin-import": "^2.32.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "~5.3.0",
+    "vite": "^5.4.20"
+  },
+  "dependencies": {
+    "@deck.gl/mapbox": "^9.2.5",
+    "deck.gl": "^9.2.5",
+    "mapbox-gl": "^3.1.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-map-gl": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.lepton.copviewer.puru",
+    "productName": "COP Viewer by Puru",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    }
+  }
+}
+
