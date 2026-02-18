@@ -31,7 +31,7 @@ export function useGetNetworkMembers(): UseGetNetworkMembersReturn {
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUpdateScheduledRef = useRef(false);
   const lastPacketRef = useRef<number | null>(null);
-  const MERGE_WINDOW_MS = 500;
+  const MERGE_WINDOW_MS = 3000;
   const STALE_OPCODE102_MS = 3000; // If opcode 102 hasn't been seen for 10 seconds, clear its metadata
   const lastByIdRef = useRef<Map<number, { node: UDPDataPoint; ts: number; opcode102Ts?: number }>>(new Map());
 

@@ -18,15 +18,73 @@ Each opcode consists of:
 
 ```
   UINT32 globalId;    // 4 bytes
-  float latitude;     // 4 bytes
-  float longitude;    // 4 bytes
-  UINT16 altitude;    // 2 bytes
-  UINT16 veIn;        // 2 bytes
-  UINT16 veIe;        // 2 bytes
-  UINT16 veIu;        // 2 bytes
-  UINT16 trueHeading; // 2 bytes
+  INT32 latitude;     // 4 bytes (with resolution factor, SIGNED!)
+  INT32 longitude;    // 4 bytes (with resolution factor, SIGNED!)
+  INT16 altitude;    // 2 bytes (SIGNED!)
+  INT16 veIn;        // 2 bytes (SIGNED!)
+  INT16 veIe;        // 2 bytes (SIGNED!)
+  INT16 veIu;        // 2 bytes (SIGNED!)
+  INT16 trueHeading; // 2 bytes (SIGNED!)
   INT16 reserved;     // 2 bytes
 ```
+
+00 65 // 101
+01 00 00 00 00 7C 00 00 01 9C 6A 77 77 AB  // leave it  
+
+05 // 5
+00 00 00      
+
+00 00 01 F4      // 500
+29 45 6A 83      // 692415107 * 0.000000083819 = 58.045856662633
+3F AD 45 69      // 1068316009 * 0.000000083819 = 89.533448898771
+0D 65            // 3429
+F8 41            // -1983
+F8 69            // -1943
+DB 49            // -9399
+75 30            // 30000
+00 00            // 0
+
+00 00 01 2C      // 300
+07 08 63 BB      // 118514619 * 0.000000083819 = 9.933579409161
+41 2D 8A 3F      // 1093503551 * 0.000000083819 = 91.666188205469
+1C 2A            // 7210
+FA C5            // -1339
+FA 0B            // -1525
+6A 42            // 27202
+1D 0C            // 7436
+00 00            // 0
+
+00 00 00 C8      // 200
+F9 EC 3F CC      // -101957684 * 0.000000083819 = -8.548200615396
+3D 46 A8 2A      // 1028044842 * 0.000000083819 = 86.164263118398
+1A 31            // 6705
+FB 8A            // -1142
+F9 1F            // -1761
+EB AD            // -5203
+75 30            // 30000
+00 00            // 0
+
+00 00 01 90      // 400
+16 3F B2 97      // 373273239 * 0.000000083819 = 31.286734124541
+26 B1 89 37      // 649169207 * 0.000000083819 = 54.413937594533
+2E 5C            // 11868
+F5 90            // -2672
+F5 B0            // -2640
+1E 92            // 7826
+19 97            // 6551
+00 00            // 0
+
+00 43 00 00      // 4390912
+F6 E8 B1 A7      // -152522329 * 0.000000083819 = -12.784172218451
+36 A6 04 D6      // 917898454 * 0.000000083819 = 76.948685429726
+11 F4            // 4596
+09 1C            // 2332
+07 6C            // 1900
+C2 5B            // -15781
+6B D8            // 27608
+00 00            // 0
+
+
 
 **Size:** 16 (header) + 4 (numOfNetworkMembers + reserved[3]) + (24 × N members)
 
@@ -176,20 +234,20 @@ header -> 1byte message count
 
 **Structure:** `opcode104` → `vector<opcode104A>`
 
-### opcode104A (30 bytes per target)
+### opcode104A (24 bytes per target)
 
 ```
   UINT32 globalId;    // 4 bytes
-  float latitude;     // 4 bytes
-  float longitude;    // 4 bytes
-  INT16 altitude;     // 2 bytes
-  INT16  heading;      // 2 bytes
-  INT16 groundSpeed;  // 2 bytes
+  INT32 latitude;     // 4 bytes (multiply by LATITUDE_RESOLUTION_101 = 0.000000083819, SIGNED!)
+  INT32 longitude;    // 4 bytes (multiply by LONGITUDE_RESOLUTION_101 = 0.000000083819, SIGNED!)
+  INT16 altitude;     // 2 bytes (multiply by ALTITUDE_RESOLUTION_101 = 1.0)
+  INT16  heading;      // 2 bytes (multiply by TRUE_HEADING_RESOLUTION = 0.0054932)
+  INT16 groundSpeed;  // 2 bytes (multiply by GROUND_SPEED_RESOLUTION_102 = 0.0625)
   UINT8 reserved[2];  // 2 bytes
-  UINT32 range;        // 4 bytes
+  UINT32 range;        // 4 bytes (raw value, no resolution factor)
 ```
 
-**Size:** 16 (header) + 4 (numOfTargets + reserved[2]) + (30 × N targets)
+**Size:** 16 (header) + 4 (numOfTargets + reserved[2]) + (24 × N targets)
 
 ## Opcode 105: Target Detailed Data
 

@@ -39,7 +39,7 @@ export const Tape: React.FC<TapeProps> = ({
   return (
     <div
       
-      className={`absolute ${isLeft ? 'left-[20px]' : 'right-[20px]'} bottom-[20px] w-[110px] h-[350px] z-[1002] pointer-events-none overflow-hidden ${className}`}
+      className={`absolute ${isLeft ? 'left-[20px]' : 'right-[20px]'} bottom-[20px] w-[110px] h-[280px] z-[1002] pointer-events-none overflow-hidden ${className}`}
     >
       {/* Main Tape Container - Changed background color with border radius */}
       <div className="relative w-full h-full bg-gray-900 border-l border-r border-cyan-300/60 rounded-lg">

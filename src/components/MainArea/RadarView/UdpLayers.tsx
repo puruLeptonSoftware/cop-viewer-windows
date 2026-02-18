@@ -91,11 +91,12 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
       nodeData: any[],
       iconUrl: string,
       layerId: string,
-      anchorAtCenter: boolean = false
+      anchorAtCenter: boolean = false,
+      customIconSize: number = 32
     ): any | null => {
       if (nodeData.length === 0) return null;
 
-      const iconSize = 32;
+      const iconSize = customIconSize;
       const anchorY = anchorAtCenter ? iconSize / 2 : iconSize;
       const anchorX = iconSize / 2;
 
@@ -184,7 +185,8 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
       networkMemberData,
       'icons/friendly_aircraft.svg',
       'network-member-layer',
-      false
+      false,
+      108
     );
 
     // Return layers in order: network members -> targets -> threats -> mother node (on top)
@@ -215,10 +217,10 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
         getAngle: 0, // No rotation - always horizontal
         getTextAnchor: 'middle',
         getAlignmentBaseline: 'bottom',
-        sizeScale: 1.2,
+        sizeScale: 0.9,
         sizeUnits: 'pixels',
         billboard: true, // Always face camera
-        getPixelOffset: [0, -28], // Offset above icon (20 pixels up)
+        getPixelOffset: [0, -32], // Offset above icon (20 pixels up)
         outlineColor: [0, 0, 0, 255], // Bright blue border (RGB: 0, 191, 255 - dodger blue)
         outlineWidth: 10, // Thicker border for better visibility
         fontWeight: 'bold',
@@ -245,7 +247,8 @@ export function useUdpLayers({ nodes, targets = [], threats = [], visible, filte
           targetData,
           'icons/hostile_aircraft.svg',
           'target-layer',
-          false
+          false,
+          108
         );
         if (targetLayer) {
           orderedLayers.push(targetLayer);
